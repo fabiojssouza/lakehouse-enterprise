@@ -1,0 +1,223 @@
+# MinIO Helm Chart Values
+# Data Lake Storage for Lakehouse Enterprise
+
+## MinIO Server mode
+mode: standalone
+
+## MinIO root credentials
+rootUser: minioadmin
+rootPassword: minioadmin123
+
+## MinIO deployment configuration
+replicaCount: 1
+
+## MinIO image configuration
+image:
+  repository: minio/minio
+  tag: RELEASE.2023-12-07T04-16-00Z
+  pullPolicy: IfNotPresent
+
+## MinIO service configuration
+service:
+  type: ClusterIP
+  port: 9000
+  nodePort: null
+  clusterIP: null
+  loadBalancerIP: null
+  loadBalancerSourceRanges: []
+  externalIPs: []
+  annotations: {}
+
+## MinIO Console service configuration
+consoleService:
+  type: ClusterIP
+  port: 9001
+  nodePort: null
+  clusterIP: null
+  loadBalancerIP: null
+  loadBalancerSourceRanges: []
+  externalIPs: []
+  annotations: {}
+
+## MinIO persistence configuration
+persistence:
+  enabled: true
+  annotations: {}
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 100Gi
+  existingClaim: ""
+  subPath: ""
+
+## MinIO resource configuration
+resources:
+  requests:
+    memory: 1Gi
+    cpu: 500m
+  limits:
+    memory: 2Gi
+    cpu: 1000m
+
+## MinIO node selector
+nodeSelector: {}
+
+## MinIO tolerations
+tolerations: []
+
+## MinIO affinity
+affinity: {}
+
+## MinIO security context
+securityContext:
+  enabled: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+## MinIO pod security context
+podSecurityContext:
+  enabled: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+## MinIO environment variables
+environment:
+  MINIO_BROWSER_REDIRECT_URL: "http://localhost:9001"
+  MINIO_SERVER_URL: "http://localhost:9000"
+  MINIO_PROMETHEUS_AUTH_TYPE: "public"
+
+## MinIO buckets to create on startup
+buckets:
+  - name: lakehouse-bronze
+    policy: none
+    purge: false
+    versioning: false
+    objectlocking: false
+  - name: lakehouse-silver
+    policy: none
+    purge: false
+    versioning: false
+    objectlocking: false
+  - name: lakehouse-gold
+    policy: none
+    purge: false
+    versioning: false
+    objectlocking: false
+  - name: airbyte-logs
+    policy: none
+    purge: false
+    versioning: false
+    objectlocking: false
+  - name: spark-history
+    policy: none
+    purge: false
+    versioning: false
+    objectlocking: false
+  - name: dbt-artifacts
+    policy: none
+    purge: false
+    versioning: false
+    objectlocking: false
+
+## MinIO users to create
+users:
+  - accessKey: airbyte
+    secretKey: airbyte123
+    policy: readwrite
+  - accessKey: spark
+    secretKey: spark123
+    policy: readwrite
+  - accessKey: trino
+    secretKey: trino123
+    policy: readwrite
+  - accessKey: dbt
+    secretKey: dbt123
+    policy: readwrite
+
+## MinIO policies
+policies:
+  - name: lakehouse-bronze-policy
+    statements:
+      - resources:
+          - "arn:aws:s3:::lakehouse-bronze"
+          - "arn:aws:s3:::lakehouse-bronze/*"
+        actions:
+          - "s3:GetBucketLocation"
+          - "s3:ListBucket"
+          - "s3:GetObject"
+          - "s3:PutObject"
+          - "s3:DeleteObject"
+  - name: lakehouse-silver-policy
+    statements:
+      - resources:
+          - "arn:aws:s3:::lakehouse-silver"
+          - "arn:aws:s3:::lakehouse-silver/*"
+        actions:
+          - "s3:GetBucketLocation"
+          - "s3:ListBucket"
+          - "s3:GetObject"
+          - "s3:PutObject"
+          - "s3:DeleteObject"
+  - name: lakehouse-gold-policy
+    statements:
+      - resources:
+          - "arn:aws:s3:::lakehouse-gold"
+          - "arn:aws:s3:::lakehouse-gold/*"
+        actions:
+          - "s3:GetBucketLocation"
+          - "s3:ListBucket"
+          - "s3:GetObject"
+          - "s3:PutObject"
+          - "s3:DeleteObject"
+
+## MinIO ingress configuration
+ingress:
+  enabled: false
+  ingressClassName: ""
+  labels: {}
+  annotations: {}
+  path: /
+  hosts:
+    - minio.local
+  tls: []
+
+## MinIO console ingress configuration
+consoleIngress:
+  enabled: false
+  ingressClassName: ""
+  labels: {}
+  annotations: {}
+  path: /
+  hosts:
+    - minio-console.local
+  tls: []
+
+## MinIO metrics configuration
+metrics:
+  serviceMonitor:
+    enabled: false
+    includeNode: false
+    public: true
+    additionalLabels: {}
+    relabelConfigs: {}
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+
+## MinIO lifecycle configuration
+lifecycle: []
+
+## MinIO notification configuration
+notifications: {}
+
+## MinIO pod disruption budget
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1
+
+## MinIO network policy
+networkPolicy:
+  enabled: false
+  allowExternal: true
+

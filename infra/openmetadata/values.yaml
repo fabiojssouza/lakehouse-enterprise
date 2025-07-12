@@ -1,0 +1,81 @@
+# OpenMetadata Helm Chart Values
+# Data Governance and Catalog for Lakehouse Enterprise
+
+global:
+  clusterName: lakehouse-cluster
+  openmetadata:
+    host: openmetadata
+    port: 8585
+
+openmetadata:
+  config:
+    authentication:
+      provider: basic
+      publicKeys:
+        - http://openmetadata:8585/api/v1/system/config/jwks
+      authority: http://openmetadata:8585/api/v1/system
+      clientId: open-metadata
+      callbackUrl: http://openmetadata:8585/callback
+    authorizer:
+      className: org.openmetadata.service.security.DefaultAuthorizer
+      containerRequestFilter: org.openmetadata.service.security.JwtFilter
+      initialAdmins:
+        - admin
+      principalDomain: open-metadata.org
+    database:
+      host: openmetadata-mysql
+      port: 3306
+      driverClass: com.mysql.cj.jdbc.Driver
+      scheme: mysql
+      databaseName: openmetadata_db
+      username: openmetadata_user
+      password: openmetadata_password
+    elasticsearch:
+      host: openmetadata-elasticsearch
+      port: 9200
+      scheme: http
+      username: ""
+      password: ""
+
+mysql:
+  enabled: true
+  auth:
+    rootPassword: password
+    username: openmetadata_user
+    password: openmetadata_password
+    database: openmetadata_db
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi
+
+elasticsearch:
+  enabled: true
+  clusterName: openmetadata
+  replicas: 1
+  minimumMasterNodes: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  volumeClaimTemplate:
+    accessModes: ["ReadWriteOnce"]
+    resources:
+      requests:
+        storage: 30Gi
+
+service:
+  type: ClusterIP
+  port: 8585
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+

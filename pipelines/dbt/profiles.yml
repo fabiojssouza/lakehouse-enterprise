@@ -1,0 +1,122 @@
+# dbt Profiles Configuration - Otimizado para Trino + Iceberg
+# Lakehouse Enterprise - Conexões otimizadas
+
+lakehouse_enterprise:
+  target: dev
+  outputs:
+    dev:
+      type: trino
+      method: none
+      host: trino.trino.svc.cluster.local
+      port: 8080
+      user: dbt_dev
+      catalog: iceberg
+      schema: lakehouse_dev
+      threads: 8
+      http_scheme: http
+      session_properties:
+        # Query optimization
+        query_max_run_time: "2h"
+        query_max_execution_time: "2h"
+        query_max_planning_time: "10m"
+        join_distribution_type: "AUTOMATIC"
+        join_reordering_strategy: "AUTOMATIC"
+        
+        # Memory management
+        query_max_memory: "8GB"
+        query_max_memory_per_node: "2GB"
+        query_max_total_memory: "16GB"
+        
+        # Iceberg specific optimizations
+        iceberg_target_max_file_size: "134217728"
+        iceberg_compression_codec: "ZSTD"
+        iceberg_table_statistics_enabled: "true"
+        iceberg_extended_statistics_enabled: "true"
+        iceberg_projection_pushdown_enabled: "true"
+        iceberg_dynamic_filtering_enabled: "true"
+        iceberg_metadata_cache_enabled: "true"
+        iceberg_sorted_writing_enabled: "true"
+        
+        # Performance tuning
+        optimizer_join_reordering_strategy: "AUTOMATIC"
+        optimizer_join_distribution_type: "AUTOMATIC"
+        optimizer_optimize_hash_generation: "true"
+        optimizer_optimize_metadata_queries: "true"
+        optimizer_push_aggregation_through_outer_join: "true"
+        optimizer_dictionary_aggregation: "true"
+        optimizer_use_mark_distinct: "true"
+        
+        # Spill configuration
+        experimental_spill_enabled: "true"
+        experimental_spiller_max_used_space_threshold: "0.8"
+        
+    test:
+      type: trino
+      method: none
+      host: trino.trino.svc.cluster.local
+      port: 8080
+      user: dbt_test
+      catalog: iceberg
+      schema: lakehouse_test
+      threads: 4
+      http_scheme: http
+      session_properties:
+        query_max_run_time: "1h"
+        query_max_execution_time: "1h"
+        join_distribution_type: "AUTOMATIC"
+        iceberg_target_max_file_size: "67108864"  # 64MB para testes
+        iceberg_compression_codec: "SNAPPY"       # Mais rápido para testes
+        iceberg_table_statistics_enabled: "false" # Desabilitado para testes
+        
+    prod:
+      type: trino
+      method: none
+      host: trino.trino.svc.cluster.local
+      port: 8080
+      user: dbt_prod
+      catalog: iceberg
+      schema: lakehouse_prod
+      threads: 16
+      http_scheme: http
+      session_properties:
+        # Production optimizations
+        query_max_run_time: "4h"
+        query_max_execution_time: "4h"
+        query_max_planning_time: "15m"
+        join_distribution_type: "AUTOMATIC"
+        join_reordering_strategy: "AUTOMATIC"
+        
+        # Memory management for production
+        query_max_memory: "32GB"
+        query_max_memory_per_node: "8GB"
+        query_max_total_memory: "64GB"
+        
+        # Iceberg production settings
+        iceberg_target_max_file_size: "268435456"  # 256MB para produção
+        iceberg_compression_codec: "ZSTD"
+        iceberg_table_statistics_enabled: "true"
+        iceberg_extended_statistics_enabled: "true"
+        iceberg_projection_pushdown_enabled: "true"
+        iceberg_dynamic_filtering_enabled: "true"
+        iceberg_metadata_cache_enabled: "true"
+        iceberg_sorted_writing_enabled: "true"
+        iceberg_object_store_layout_enabled: "true"
+        
+        # Advanced optimizations
+        optimizer_join_reordering_strategy: "AUTOMATIC"
+        optimizer_join_distribution_type: "AUTOMATIC"
+        optimizer_optimize_hash_generation: "true"
+        optimizer_optimize_metadata_queries: "true"
+        optimizer_push_aggregation_through_outer_join: "true"
+        optimizer_push_table_write_through_union: "true"
+        optimizer_dictionary_aggregation: "true"
+        optimizer_use_mark_distinct: "true"
+        
+        # Spill configuration for large queries
+        experimental_spill_enabled: "true"
+        experimental_spiller_max_used_space_threshold: "0.9"
+        
+        # Fault tolerance
+        retry_policy: "QUERY"
+        exchange_compression_enabled: "true"
+

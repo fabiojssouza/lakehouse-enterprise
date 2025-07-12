@@ -1,0 +1,304 @@
+# dbt Project Configuration
+# Lakehouse Enterprise - Modern Data Stack
+
+name: 'lakehouse_enterprise'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'lakehouse_enterprise'
+
+# These configurations specify where dbt should look for different types of files.
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Models configuration - OTIMIZADO PARA ICEBERG
+models:
+  lakehouse_enterprise:
+    # Bronze layer - Raw data com Iceberg
+    bronze:
+      +materialized: table
+      +schema: bronze
+      +file_format: parquet
+      +table_type: iceberg
+      +location_root: 's3a://lakehouse-bronze'
+      +partition_by: ['load_date']
+      +table_properties:
+        'format-version': '2'
+        'write.target-file-size-bytes': '134217728'  # 128MB
+        'write.parquet.compression-codec': 'zstd'
+        'write.parquet.page-size-bytes': '1048576'   # 1MB
+        'write.parquet.dict-size-bytes': '2097152'   # 2MB
+        'write.metadata.compression-codec': 'gzip'
+        'write.delete-mode': 'merge-on-read'
+        'write.update-mode': 'merge-on-read'
+        'write.merge-mode': 'merge-on-read'
+        'history.expire.min-snapshots-to-keep': '5'
+        'history.expire.max-snapshot-age-ms': '604800000'  # 7 days
+      
+    # Silver layer - Data Vault com Iceberg otimizado
+    silver:
+      +materialized: table
+      +schema: silver
+      +file_format: parquet
+      +table_type: iceberg
+      +location_root: 's3a://lakehouse-silver'
+      +table_properties:
+        'format-version': '2'
+        'write.target-file-size-bytes': '67108864'   # 64MB para Data Vault
+        'write.parquet.compression-codec': 'zstd'
+        'write.parquet.page-size-bytes': '524288'    # 512KB
+        'write.metadata.compression-codec': 'gzip'
+        'write.delete-mode': 'copy-on-write'
+        'write.update-mode': 'merge-on-read'
+        'write.merge-mode': 'merge-on-read'
+        'history.expire.min-snapshots-to-keep': '10'
+        'history.expire.max-snapshot-age-ms': '1209600000'  # 14 days
+        'write.object-storage.enabled': 'true'
+        'write.object-storage.path': 'data'
+      
+      # Hubs - Configuração específica
+      hubs:
+        +materialized: incremental
+        +unique_key: ['hash_key']
+        +incremental_strategy: 'merge'
+        +on_schema_change: 'append_new_columns'
+        +partition_by: ['load_date']
+        +sort_by: ['hash_key']
+        +table_properties:
+          'write.target-file-size-bytes': '33554432'  # 32MB para hubs
+          'write.distribution-mode': 'hash'
+          'write.hash-distribution-columns': 'hash_key'
+        
+      # Links - Configuração específica
+      links:
+        +materialized: incremental
+        +unique_key: ['hash_key']
+        +incremental_strategy: 'merge'
+        +on_schema_change: 'append_new_columns'
+        +partition_by: ['load_date']
+        +sort_by: ['hash_key']
+        +table_properties:
+          'write.target-file-size-bytes': '67108864'  # 64MB para links
+          'write.distribution-mode': 'hash'
+          'write.hash-distribution-columns': 'hash_key'
+        
+      # Satellites - Configuração específica
+      satellites:
+        +materialized: incremental
+        +unique_key: ['hash_key', 'load_date']
+        +incremental_strategy: 'merge'
+        +on_schema_change: 'append_new_columns'
+        +partition_by: ['load_date']
+        +sort_by: ['hash_key', 'load_date']
+        +table_properties:
+          'write.target-file-size-bytes': '134217728'  # 128MB para satellites
+          'write.distribution-mode': 'hash'
+          'write.hash-distribution-columns': 'hash_key'
+    
+    # Gold layer - Analytics ready com otimizações
+    gold:
+      +materialized: table
+      +schema: gold
+      +file_format: parquet
+      +table_type: iceberg
+      +location_root: 's3a://lakehouse-gold'
+      +table_properties:
+        'format-version': '2'
+        'write.target-file-size-bytes': '268435456'  # 256MB para marts
+        'write.parquet.compression-codec': 'zstd'
+        'write.parquet.page-size-bytes': '2097152'   # 2MB
+        'write.metadata.compression-codec': 'gzip'
+        'write.delete-mode': 'copy-on-write'
+        'write.update-mode': 'copy-on-write'
+        'write.merge-mode': 'copy-on-write'
+        'history.expire.min-snapshots-to-keep': '3'
+        'history.expire.max-snapshot-age-ms': '259200000'  # 3 days
+        'write.object-storage.enabled': 'true'
+        'write.object-storage.path': 'data'
+      
+      # Marts - Configuração específica
+      marts:
+        +materialized: table
+        +unique_key: ['id']
+        +partition_by: ['data_particao']
+        +sort_by: ['id']
+        +table_properties:
+          'write.distribution-mode': 'hash'
+          'write.hash-distribution-columns': 'id'
+          'write.sorted-by': 'id'
+        
+      # Aggregations - Configuração específica
+      aggregations:
+        +materialized: table
+        +partition_by: ['periodo']
+        +sort_by: ['periodo', 'categoria']
+        +table_properties:
+          'write.distribution-mode': 'range'
+          'write.range-distribution-columns': 'periodo'
+
+# Seeds configuration para Iceberg
+seeds:
+  lakehouse_enterprise:
+    +schema: seeds
+    +file_format: parquet
+    +table_type: iceberg
+    +table_properties:
+      'format-version': '2'
+      'write.target-file-size-bytes': '16777216'  # 16MB para seeds
+      'write.parquet.compression-codec': 'snappy'
+
+# Snapshots configuration para Iceberg
+snapshots:
+  lakehouse_enterprise:
+    +target_schema: snapshots
+    +strategy: timestamp
+    +updated_at: updated_at
+    +file_format: parquet
+    +table_type: iceberg
+    +table_properties:
+      'format-version': '2'
+      'write.target-file-size-bytes': '134217728'
+      'write.parquet.compression-codec': 'zstd'
+
+# Variables específicas para Data Vault e Iceberg
+vars:
+  # Data Vault configuration
+  hash_algorithm: 'md5'
+  ghost_record_type: 'ghost'
+  error_record_type: 'error'
+  
+  # Date variables
+  start_date: '2023-01-01'
+  end_date: '2024-12-31'
+  
+  # Source system variables
+  facebook_ads_source: 'facebook_ads'
+  google_ads_source: 'google_ads'
+  crm_source: 'crm'
+  
+  # Iceberg specific variables
+  iceberg_format_version: '2'
+  iceberg_compression: 'zstd'
+  iceberg_target_file_size: '134217728'  # 128MB
+  iceberg_partition_spec: 'daily'
+  
+  # Performance tuning
+  max_partitions_per_scan: 1000
+  max_file_size_mb: 256
+  min_file_size_mb: 16
+  
+  # Data quality
+  enable_data_quality_tests: true
+  enable_freshness_tests: true
+  enable_uniqueness_tests: true
+
+# Macros configuration
+dispatch:
+  - macro_namespace: dbt_utils
+    search_order: ['lakehouse_enterprise', 'dbt_utils']
+  - macro_namespace: dbt_expectations
+    search_order: ['lakehouse_enterprise', 'dbt_expectations']
+
+# Documentation
+docs-paths: ["docs"]
+
+# Packages otimizados para Iceberg
+packages:
+  - package: dbt-labs/dbt_utils
+    version: 1.1.1
+  - package: calogica/dbt_expectations
+    version: 0.10.1
+  - package: dbt-labs/audit_helper
+    version: 0.9.0
+  - package: dbt-labs/dbt_external_tables
+    version: 0.8.7
+
+# Tests configuration com foco em Data Vault
+tests:
+  lakehouse_enterprise:
+    +severity: warn
+    +store_failures: true
+    +schema: test_failures
+    +file_format: parquet
+    +table_type: iceberg
+
+# Hooks específicos para Iceberg
+on-run-start:
+  - "{{ log('Starting dbt run for Lakehouse Enterprise with Iceberg', info=True) }}"
+  - "CREATE SCHEMA IF NOT EXISTS {{ target.schema }}_bronze"
+  - "CREATE SCHEMA IF NOT EXISTS {{ target.schema }}_silver"
+  - "CREATE SCHEMA IF NOT EXISTS {{ target.schema }}_gold"
+  - "CREATE SCHEMA IF NOT EXISTS {{ target.schema }}_test_failures"
+  
+  # Configurações de sessão Trino para Iceberg
+  - "SET SESSION iceberg.target_max_file_size = BIGINT '{{ var('iceberg_target_file_size') }}'"
+  - "SET SESSION iceberg.compression_codec = '{{ var('iceberg_compression') }}'"
+  - "SET SESSION iceberg.table_statistics_enabled = true"
+  - "SET SESSION iceberg.extended_statistics_enabled = true"
+
+on-run-end:
+  - "{{ log('Completed dbt run for Lakehouse Enterprise', info=True) }}"
+  - "{{ audit_helper.compare_queries() if var('audit_enabled', false) }}"
+  
+  # Limpeza automática de snapshots antigos
+  - "{% if target.name == 'prod' %}
+       {% for schema in ['bronze', 'silver', 'gold'] %}
+         CALL iceberg.system.expire_snapshots(
+           schema_name => '{{ target.schema }}_{{ schema }}',
+           older_than => TIMESTAMP '{{ (modules.datetime.datetime.now() - modules.datetime.timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S') }}'
+         );
+       {% endfor %}
+     {% endif %}"
+
+# Quoting configuration para Iceberg
+quoting:
+  database: false
+  schema: false
+  identifier: false
+
+# Iceberg specific configurations
+iceberg:
+  # Table format version
+  format_version: 2
+  
+  # Compression settings
+  compression:
+    parquet: zstd
+    metadata: gzip
+  
+  # File size settings
+  target_file_size_bytes: 134217728  # 128MB
+  max_file_size_bytes: 268435456     # 256MB
+  min_file_size_bytes: 16777216      # 16MB
+  
+  # Partitioning strategy
+  partition_strategy: daily
+  max_partitions_per_scan: 1000
+  
+  # Snapshot management
+  snapshot_retention:
+    min_snapshots: 5
+    max_age_days: 7
+  
+  # Performance optimizations
+  object_storage_enabled: true
+  sorted_writing_enabled: true
+  metadata_cache_enabled: true
+  
+  # Write modes
+  write_mode:
+    hubs: copy-on-write
+    links: copy-on-write
+    satellites: merge-on-read
+    marts: copy-on-write
+

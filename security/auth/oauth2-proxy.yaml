@@ -1,0 +1,241 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: auth-system
+  labels:
+    name: auth-system
+
+---
+# Secret para OAuth2 Proxy
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oauth2-proxy-secrets
+  namespace: auth-system
+type: Opaque
+stringData:
+  # Google OAuth (substitua pelos seus valores)
+  client-id: "your-google-client-id.apps.googleusercontent.com"
+  client-secret: "your-google-client-secret"
+  cookie-secret: "your-32-char-cookie-secret-here"
+  
+  # GitHub OAuth (alternativa)
+  # client-id: "your-github-client-id"
+  # client-secret: "your-github-client-secret"
+  
+  # Azure AD OAuth (alternativa)
+  # client-id: "your-azure-client-id"
+  # client-secret: "your-azure-client-secret"
+
+---
+# ConfigMap para OAuth2 Proxy
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oauth2-proxy-config
+  namespace: auth-system
+data:
+  oauth2_proxy.cfg: |
+    # Provider configuration
+    provider = "google"
+    # provider = "github"
+    # provider = "azure"
+    
+    # URLs
+    http_address = "0.0.0.0:4180"
+    redirect_url = "https://auth.yourdomain.com/oauth2/callback"
+    
+    # Upstream configuration
+    upstreams = [ "file:///dev/null" ]
+    
+    # Email domains (substitua pelo seu domínio)
+    email_domains = [ "yourdomain.com" ]
+    
+    # Cookie configuration
+    cookie_domains = [ ".yourdomain.com" ]
+    cookie_name = "_oauth2_proxy"
+    cookie_secure = true
+    cookie_httponly = true
+    cookie_samesite = "lax"
+    cookie_expire = "168h"
+    
+    # Security
+    skip_provider_button = true
+    skip_auth_strip_headers = false
+    
+    # Headers
+    set_xauthrequest = true
+    set_authorization_header = true
+    pass_authorization_header = true
+    pass_access_token = true
+    pass_user_headers = true
+    
+    # Logging
+    request_logging = true
+    auth_logging = true
+    standard_logging = true
+    
+    # Whitelist specific users (opcional)
+    # authenticated_emails_file = "/etc/oauth2-proxy/authenticated-emails"
+
+---
+# Deployment para OAuth2 Proxy
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+  namespace: auth-system
+  labels:
+    app: oauth2-proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        app: oauth2-proxy
+    spec:
+      containers:
+      - name: oauth2-proxy
+        image: quay.io/oauth2-proxy/oauth2-proxy:v7.4.0
+        args:
+        - --config=/etc/oauth2-proxy/oauth2_proxy.cfg
+        env:
+        - name: OAUTH2_PROXY_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secrets
+              key: client-id
+        - name: OAUTH2_PROXY_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secrets
+              key: client-secret
+        - name: OAUTH2_PROXY_COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secrets
+              key: cookie-secret
+        ports:
+        - containerPort: 4180
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 4180
+          initialDelaySeconds: 30
+          timeoutSeconds: 1
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 4180
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/oauth2-proxy
+          readOnly: true
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 2000
+          runAsGroup: 2000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      volumes:
+      - name: config
+        configMap:
+          name: oauth2-proxy-config
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 2000
+        runAsGroup: 2000
+        fsGroup: 2000
+
+---
+# Service para OAuth2 Proxy
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy
+  namespace: auth-system
+  labels:
+    app: oauth2-proxy
+spec:
+  type: ClusterIP
+  ports:
+  - port: 4180
+    targetPort: 4180
+    protocol: TCP
+    name: http
+  selector:
+    app: oauth2-proxy
+
+---
+# Ingress para OAuth2 Proxy
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oauth2-proxy-ingress
+  namespace: auth-system
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - auth.yourdomain.com
+    secretName: oauth2-proxy-tls
+  rules:
+  - host: auth.yourdomain.com
+    http:
+      paths:
+      - path: /oauth2
+        pathType: Prefix
+        backend:
+          service:
+            name: oauth2-proxy
+            port:
+              number: 4180
+
+---
+# HorizontalPodAutoscaler para OAuth2 Proxy
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: oauth2-proxy-hpa
+  namespace: auth-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: oauth2-proxy
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+

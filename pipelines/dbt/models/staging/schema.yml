@@ -1,0 +1,218 @@
+version: 2
+
+# Sources da camada Bronze
+sources:
+  - name: bronze
+    description: "Camada Bronze - Dados brutos ingeridos pelo Prefect"
+    schema: bronze
+    tables:
+      - name: facebook_ads_leads
+        description: "Leads brutos extraídos do Facebook Ads API"
+        columns:
+          - name: id
+            description: "ID único do lead no Facebook"
+            tests:
+              - not_null
+              - unique
+          - name: created_time
+            description: "Timestamp de criação do lead"
+            tests:
+              - not_null
+          - name: ad_id
+            description: "ID do anúncio que gerou o lead"
+          - name: campaign_id
+            description: "ID da campanha"
+          - name: field_data
+            description: "Dados do formulário em formato JSON"
+          - name: _extraction_timestamp
+            description: "Timestamp da extração dos dados"
+            tests:
+              - not_null
+          - name: _source_system
+            description: "Sistema de origem dos dados"
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['facebook_ads']
+          - name: _load_date
+            description: "Data de carga dos dados"
+            tests:
+              - not_null
+
+      - name: google_ads_campaigns
+        description: "Dados de campanhas do Google Ads"
+        columns:
+          - name: customer_id
+            description: "ID do cliente no Google Ads"
+            tests:
+              - not_null
+          - name: campaign_id
+            description: "ID da campanha"
+            tests:
+              - not_null
+          - name: date
+            description: "Data dos dados da campanha"
+            tests:
+              - not_null
+          - name: impressions
+            description: "Número de impressões"
+          - name: clicks
+            description: "Número de cliques"
+          - name: cost_micros
+            description: "Custo em micros (1/1.000.000 da moeda)"
+          - name: _extraction_timestamp
+            description: "Timestamp da extração dos dados"
+            tests:
+              - not_null
+          - name: _source_system
+            description: "Sistema de origem dos dados"
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['google_ads']
+
+      - name: activecampaign_contacts
+        description: "Contatos extraídos do ActiveCampaign"
+        columns:
+          - name: id
+            description: "ID único do contato no ActiveCampaign"
+            tests:
+              - not_null
+              - unique
+          - name: email
+            description: "Email do contato"
+            tests:
+              - not_null
+          - name: firstName
+            description: "Primeiro nome do contato"
+          - name: lastName
+            description: "Último nome do contato"
+          - name: phone
+            description: "Telefone do contato"
+          - name: cdate
+            description: "Data de criação do contato"
+            tests:
+              - not_null
+          - name: _extraction_timestamp
+            description: "Timestamp da extração dos dados"
+            tests:
+              - not_null
+          - name: _source_system
+            description: "Sistema de origem dos dados"
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['activecampaign']
+
+# Models da camada Staging
+models:
+  - name: stg_facebook_leads
+    description: "Leads do Facebook Ads limpos e padronizados"
+    columns:
+      - name: lead_id
+        description: "ID único do lead"
+        tests:
+          - not_null
+          - unique
+      - name: nome
+        description: "Nome do lead padronizado (UPPER)"
+      - name: email
+        description: "Email do lead padronizado (lower)"
+        tests:
+          - not_null
+      - name: telefone
+        description: "Telefone do lead (apenas números)"
+      - name: origem
+        description: "Origem dos dados"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['facebook_ads']
+      - name: has_contact_info
+        description: "Flag indicando se tem informações de contato"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+      - name: has_valid_email
+        description: "Flag indicando se tem email válido"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+
+  - name: stg_google_ads
+    description: "Dados de campanhas Google Ads limpos e padronizados"
+    columns:
+      - name: customer_id
+        description: "ID do cliente"
+        tests:
+          - not_null
+      - name: campaign_id
+        description: "ID da campanha"
+        tests:
+          - not_null
+      - name: campaign_date
+        description: "Data da campanha"
+        tests:
+          - not_null
+      - name: impressions
+        description: "Número de impressões"
+        tests:
+          - not_null
+      - name: clicks
+        description: "Número de cliques"
+        tests:
+          - not_null
+      - name: cost_brl
+        description: "Custo em reais"
+        tests:
+          - not_null
+      - name: origem
+        description: "Origem dos dados"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['google_ads']
+      - name: has_activity
+        description: "Flag indicando se tem atividade"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+
+  - name: stg_activecampaign_contacts
+    description: "Contatos do ActiveCampaign limpos e padronizados"
+    columns:
+      - name: contact_id
+        description: "ID único do contato"
+        tests:
+          - not_null
+          - unique
+      - name: nome_completo
+        description: "Nome completo padronizado"
+      - name: email
+        description: "Email padronizado"
+        tests:
+          - not_null
+      - name: telefone
+        description: "Telefone padronizado"
+      - name: origem
+        description: "Origem dos dados"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['activecampaign']
+      - name: qualidade_lead
+        description: "Qualidade do lead baseada em completude dos dados"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Completo', 'Parcial', 'Mínimo', 'Incompleto']
+      - name: has_contact_info
+        description: "Flag indicando se tem informações de contato"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+

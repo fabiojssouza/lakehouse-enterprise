@@ -1,0 +1,294 @@
+# Superset Dashboard Configuration
+# Lakehouse Enterprise - Marketing Analytics Dashboard
+
+dashboard_title: "Lakehouse Enterprise - Marketing Analytics"
+description: "Dashboard principal para análise de campanhas e leads unificados"
+
+# Database connections
+databases:
+  - database_name: "Trino Lakehouse"
+    sqlalchemy_uri: "trino://admin@trino.trino.svc.cluster.local:8080/iceberg/lakehouse"
+    extra: |
+      {
+        "metadata_params": {},
+        "engine_params": {
+          "connect_args": {
+            "protocol": "http"
+          }
+        }
+      }
+
+# Datasets (Tables/Views)
+datasets:
+  - table_name: "mart_leads_unificados"
+    database: "Trino Lakehouse"
+    schema: "gold"
+    description: "Mart unificado de leads com dados de campanhas"
+    columns:
+      - column_name: "lead_key"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Chave única do lead"
+      - column_name: "pessoa_hash_key"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Hash key da pessoa"
+      - column_name: "nome"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Nome da pessoa"
+      - column_name: "email"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Email da pessoa"
+      - column_name: "telefone"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Telefone da pessoa"
+      - column_name: "origem"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Origem do lead (facebook_ads, google_ads, crm)"
+      - column_name: "cliente_origem"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Cliente que gerou o lead"
+      - column_name: "lead_created_time"
+        type: "TIMESTAMP"
+        is_dttm: true
+        description: "Data/hora de criação do lead"
+      - column_name: "completude_score"
+        type: "INTEGER"
+        is_dttm: false
+        description: "Score de completude dos dados (0-3)"
+      - column_name: "campaign_name"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Nome da campanha"
+      - column_name: "plataforma"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Plataforma da campanha"
+      - column_name: "campaign_spend"
+        type: "DOUBLE"
+        is_dttm: false
+        description: "Gasto da campanha"
+      - column_name: "impressions"
+        type: "BIGINT"
+        is_dttm: false
+        description: "Impressões da campanha"
+      - column_name: "clicks"
+        type: "BIGINT"
+        is_dttm: false
+        description: "Clicks da campanha"
+      - column_name: "ctr"
+        type: "DOUBLE"
+        is_dttm: false
+        description: "Taxa de clique (CTR)"
+      - column_name: "cpc"
+        type: "DOUBLE"
+        is_dttm: false
+        description: "Custo por clique (CPC)"
+      - column_name: "qualidade_dados"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Categoria de qualidade dos dados"
+      - column_name: "categoria_tempo"
+        type: "VARCHAR"
+        is_dttm: false
+        description: "Categoria temporal do lead"
+
+  - table_name: "campaigns"
+    database: "Trino Lakehouse"
+    schema: "lakehouse"
+    description: "Dados unificados de campanhas"
+
+# Charts configuration
+charts:
+  - chart_title: "Leads por Origem"
+    chart_type: "pie"
+    dataset: "mart_leads_unificados"
+    metrics:
+      - metric_name: "count"
+        expression: "COUNT(*)"
+        metric_type: "count"
+    groupby:
+      - "origem"
+    description: "Distribuição de leads por origem (Facebook, Google, CRM)"
+
+  - chart_title: "Leads por Dia"
+    chart_type: "line"
+    dataset: "mart_leads_unificados"
+    metrics:
+      - metric_name: "count_leads"
+        expression: "COUNT(*)"
+        metric_type: "count"
+    groupby:
+      - "lead_created_time"
+    time_grain: "P1D"
+    description: "Evolução diária do número de leads"
+
+  - chart_title: "Qualidade dos Dados"
+    chart_type: "bar"
+    dataset: "mart_leads_unificados"
+    metrics:
+      - metric_name: "count"
+        expression: "COUNT(*)"
+        metric_type: "count"
+    groupby:
+      - "qualidade_dados"
+    description: "Distribuição da qualidade dos dados dos leads"
+
+  - chart_title: "Performance por Plataforma"
+    chart_type: "table"
+    dataset: "mart_leads_unificados"
+    metrics:
+      - metric_name: "total_leads"
+        expression: "COUNT(*)"
+        metric_type: "count"
+      - metric_name: "total_spend"
+        expression: "SUM(campaign_spend)"
+        metric_type: "sum"
+      - metric_name: "avg_cpc"
+        expression: "AVG(cpc)"
+        metric_type: "avg"
+      - metric_name: "avg_ctr"
+        expression: "AVG(ctr)"
+        metric_type: "avg"
+    groupby:
+      - "plataforma"
+    description: "Métricas de performance por plataforma"
+
+  - chart_title: "Leads por Cliente"
+    chart_type: "bar"
+    dataset: "mart_leads_unificados"
+    metrics:
+      - metric_name: "count"
+        expression: "COUNT(*)"
+        metric_type: "count"
+    groupby:
+      - "cliente_origem"
+    description: "Volume de leads por cliente"
+
+  - chart_title: "Funil de Completude"
+    chart_type: "funnel"
+    dataset: "mart_leads_unificados"
+    metrics:
+      - metric_name: "total_leads"
+        expression: "COUNT(*)"
+        metric_type: "count"
+      - metric_name: "leads_com_nome"
+        expression: "SUM(has_nome)"
+        metric_type: "sum"
+      - metric_name: "leads_com_email"
+        expression: "SUM(has_valid_email)"
+        metric_type: "sum"
+      - metric_name: "leads_com_telefone"
+        expression: "SUM(has_valid_telefone)"
+        metric_type: "sum"
+    description: "Funil de completude dos dados dos leads"
+
+  - chart_title: "Custo por Lead por Campanha"
+    chart_type: "scatter"
+    dataset: "mart_leads_unificados"
+    metrics:
+      - metric_name: "cost_per_lead"
+        expression: "SUM(campaign_spend) / COUNT(*)"
+        metric_type: "avg"
+      - metric_name: "total_leads"
+        expression: "COUNT(*)"
+        metric_type: "count"
+    groupby:
+      - "campaign_name"
+    description: "Relação entre custo por lead e volume por campanha"
+
+  - chart_title: "Heatmap Temporal"
+    chart_type: "heatmap"
+    dataset: "mart_leads_unificados"
+    metrics:
+      - metric_name: "count"
+        expression: "COUNT(*)"
+        metric_type: "count"
+    groupby:
+      - "lead_created_time"
+    time_grain: "PT1H"
+    description: "Heatmap de leads por hora do dia e dia da semana"
+
+# Dashboard layout
+dashboard_layout:
+  - row: 1
+    charts:
+      - chart: "Leads por Origem"
+        width: 6
+      - chart: "Qualidade dos Dados"
+        width: 6
+  
+  - row: 2
+    charts:
+      - chart: "Leads por Dia"
+        width: 12
+  
+  - row: 3
+    charts:
+      - chart: "Performance por Plataforma"
+        width: 8
+      - chart: "Leads por Cliente"
+        width: 4
+  
+  - row: 4
+    charts:
+      - chart: "Funil de Completude"
+        width: 6
+      - chart: "Custo por Lead por Campanha"
+        width: 6
+  
+  - row: 5
+    charts:
+      - chart: "Heatmap Temporal"
+        width: 12
+
+# Filters
+filters:
+  - filter_name: "Data do Lead"
+    column: "lead_created_time"
+    filter_type: "time_range"
+    default_value: "Last 30 days"
+  
+  - filter_name: "Origem"
+    column: "origem"
+    filter_type: "filter_select"
+    default_value: "All"
+  
+  - filter_name: "Cliente"
+    column: "cliente_origem"
+    filter_type: "filter_select"
+    default_value: "All"
+  
+  - filter_name: "Plataforma"
+    column: "plataforma"
+    filter_type: "filter_select"
+    default_value: "All"
+
+# Permissions
+permissions:
+  - role: "Admin"
+    permissions: ["can_read", "can_write", "can_delete"]
+  
+  - role: "Analyst"
+    permissions: ["can_read"]
+  
+  - role: "Marketing"
+    permissions: ["can_read"]
+
+# Refresh settings
+refresh_settings:
+  auto_refresh: true
+  refresh_interval: 300  # 5 minutes
+  cache_timeout: 3600    # 1 hour
+
+# Export settings
+export_settings:
+  enable_csv: true
+  enable_excel: true
+  enable_pdf: true
+

@@ -1,0 +1,362 @@
+# Hive Metastore Standalone Helm Chart Values
+# Metastore service para Apache Iceberg
+
+## Hive Metastore image configuration
+image:
+  repository: apache/hive
+  tag: "4.0.0"
+  pullPolicy: IfNotPresent
+
+## Hive Metastore configuration
+metastore:
+  # Configuração do Thrift server
+  port: 9083
+  
+  # Configuração de recursos
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  
+  # Configuração JVM
+  jvm:
+    heapSize: "2g"
+    extraOpts: |
+      -XX:+UseG1GC
+      -XX:G1HeapRegionSize=32m
+      -XX:+UseG1MixedGCCountTarget=8
+      -XX:+UseStringDeduplication
+      -XX:MaxGCPauseMillis=200
+      -Djava.net.preferIPv4Stack=true
+      -Dcom.sun.management.jmxremote
+      -Dcom.sun.management.jmxremote.authenticate=false
+      -Dcom.sun.management.jmxremote.ssl=false
+      -Dcom.sun.management.jmxremote.port=9999
+
+## Hive Metastore database configuration
+database:
+  type: postgres
+  host: postgresql.postgresql.svc.cluster.local
+  port: 5432
+  name: metastore
+  username: hive
+  password: hive123
+  schema: hive_metastore
+  
+  # Connection pool settings
+  connectionPool:
+    maxActive: 20
+    maxIdle: 10
+    minIdle: 5
+    maxWait: 30000
+    testOnBorrow: true
+    testWhileIdle: true
+    validationQuery: "SELECT 1"
+
+## Storage configuration (MinIO S3)
+storage:
+  s3:
+    endpoint: "http://minio.minio.svc.cluster.local:9000"
+    accessKey: "minioadmin"
+    secretKey: "minioadmin123"
+    pathStyleAccess: true
+    sslEnabled: false
+    warehouseDir: "s3a://lakehouse-warehouse/"
+    
+  # Hadoop configuration
+  hadoop:
+    coreSite: |
+      <configuration>
+        <property>
+          <name>fs.defaultFS</name>
+          <value>s3a://lakehouse-warehouse</value>
+        </property>
+        <property>
+          <name>fs.s3a.endpoint</name>
+          <value>http://minio.minio.svc.cluster.local:9000</value>
+        </property>
+        <property>
+          <name>fs.s3a.access.key</name>
+          <value>minioadmin</value>
+        </property>
+        <property>
+          <name>fs.s3a.secret.key</name>
+          <value>minioadmin123</value>
+        </property>
+        <property>
+          <name>fs.s3a.path.style.access</name>
+          <value>true</value>
+        </property>
+        <property>
+          <name>fs.s3a.connection.ssl.enabled</name>
+          <value>false</value>
+        </property>
+        <property>
+          <name>fs.s3a.impl</name>
+          <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+        </property>
+        <property>
+          <name>fs.s3a.fast.upload</name>
+          <value>true</value>
+        </property>
+        <property>
+          <name>fs.s3a.block.size</name>
+          <value>134217728</value>
+        </property>
+        <property>
+          <name>fs.s3a.multipart.size</name>
+          <value>67108864</value>
+        </property>
+        <property>
+          <name>fs.s3a.multipart.threshold</name>
+          <value>134217728</value>
+        </property>
+        <property>
+          <name>fs.s3a.threads.max</name>
+          <value>10</value>
+        </property>
+        <property>
+          <name>fs.s3a.connection.maximum</name>
+          <value>15</value>
+        </property>
+        <property>
+          <name>fs.s3a.attempts.maximum</name>
+          <value>3</value>
+        </property>
+        <property>
+          <name>fs.s3a.retry.interval</name>
+          <value>1000</value>
+        </property>
+      </configuration>
+
+## Hive Metastore site configuration
+metastoreSite: |
+  <configuration>
+    <!-- Database connection -->
+    <property>
+      <name>javax.jdo.option.ConnectionDriverName</name>
+      <value>org.postgresql.Driver</value>
+    </property>
+    <property>
+      <name>javax.jdo.option.ConnectionURL</name>
+      <value>jdbc:postgresql://postgresql.postgresql.svc.cluster.local:5432/metastore</value>
+    </property>
+    <property>
+      <name>javax.jdo.option.ConnectionUserName</name>
+      <value>hive</value>
+    </property>
+    <property>
+      <name>javax.jdo.option.ConnectionPassword</name>
+      <value>hive123</value>
+    </property>
+    
+    <!-- Metastore configuration -->
+    <property>
+      <name>metastore.warehouse.dir</name>
+      <value>s3a://lakehouse-warehouse/</value>
+    </property>
+    <property>
+      <name>metastore.thrift.port</name>
+      <value>9083</value>
+    </property>
+    <property>
+      <name>metastore.thrift.bind.host</name>
+      <value>0.0.0.0</value>
+    </property>
+    
+    <!-- Schema validation -->
+    <property>
+      <name>hive.metastore.schema.verification</name>
+      <value>true</value>
+    </property>
+    <property>
+      <name>hive.metastore.schema.verification.record.version</name>
+      <value>true</value>
+    </property>
+    
+    <!-- Performance tuning -->
+    <property>
+      <name>hive.metastore.client.socket.timeout</name>
+      <value>600</value>
+    </property>
+    <property>
+      <name>hive.metastore.connect.retries</name>
+      <value>5</value>
+    </property>
+    <property>
+      <name>hive.metastore.failure.retries</name>
+      <value>3</value>
+    </property>
+    <property>
+      <name>hive.metastore.server.max.threads</name>
+      <value>100</value>
+    </property>
+    <property>
+      <name>hive.metastore.server.min.threads</name>
+      <value>10</value>
+    </property>
+    
+    <!-- Connection pooling -->
+    <property>
+      <name>javax.jdo.option.ConnectionPoolingType</name>
+      <value>BONECP</value>
+    </property>
+    <property>
+      <name>javax.jdo.option.ConnectionPool.maxPoolSize</name>
+      <value>20</value>
+    </property>
+    <property>
+      <name>javax.jdo.option.ConnectionPool.minPoolSize</name>
+      <value>5</value>
+    </property>
+    
+    <!-- Iceberg specific configurations -->
+    <property>
+      <name>metastore.storage.schema.reader.impl</name>
+      <value>org.apache.hadoop.hive.metastore.SerDeStorageSchemaReader</value>
+    </property>
+    <property>
+      <name>hive.metastore.event.listeners</name>
+      <value>org.apache.iceberg.hive.HiveTableListener</value>
+    </property>
+    
+    <!-- Security -->
+    <property>
+      <name>hive.metastore.sasl.enabled</name>
+      <value>false</value>
+    </property>
+    <property>
+      <name>hive.metastore.execute.setugi</name>
+      <value>false</value>
+    </property>
+  </configuration>
+
+## Service configuration
+service:
+  type: ClusterIP
+  port: 9083
+  targetPort: 9083
+  annotations: {}
+
+## Deployment configuration
+deployment:
+  replicas: 1
+  strategy:
+    type: Recreate
+  
+  # Health checks
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+    successThreshold: 1
+    tcpSocket:
+      port: 9083
+  
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+    tcpSocket:
+      port: 9083
+
+## Schema initialization job
+schemaInit:
+  enabled: true
+  image:
+    repository: apache/hive
+    tag: "4.0.0"
+  
+  # Job configuration
+  job:
+    restartPolicy: OnFailure
+    backoffLimit: 3
+    activeDeadlineSeconds: 600
+  
+  # Schema initialization command
+  command: |
+    #!/bin/bash
+    set -e
+    
+    echo "Waiting for PostgreSQL to be ready..."
+    until pg_isready -h postgresql.postgresql.svc.cluster.local -p 5432 -U hive; do
+      echo "PostgreSQL is not ready yet. Waiting..."
+      sleep 5
+    done
+    
+    echo "Initializing Hive Metastore schema..."
+    /opt/hive/bin/schematool -dbType postgres -initSchema \
+      -driver org.postgresql.Driver \
+      -userName hive \
+      -passWord hive123 \
+      -url "jdbc:postgresql://postgresql.postgresql.svc.cluster.local:5432/metastore"
+    
+    echo "Schema initialization completed successfully!"
+
+## ConfigMaps and Secrets
+configMaps:
+  enabled: true
+  
+secrets:
+  enabled: true
+  data:
+    database-password: aGl2ZTEyMw==  # base64 encoded "hive123"
+    s3-access-key: bWluaW9hZG1pbg==  # base64 encoded "minioadmin"
+    s3-secret-key: bWluaW9hZG1pbjEyMw==  # base64 encoded "minioadmin123"
+
+## Security context
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+## Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+## Node selector
+nodeSelector: {}
+
+## Tolerations
+tolerations: []
+
+## Affinity
+affinity: {}
+
+## Priority class
+priorityClassName: ""
+
+## Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+## Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+    path: /metrics
+    port: 9999
+
+## Logging
+logging:
+  level: INFO
+  loggers:
+    "org.apache.hadoop": WARN
+    "org.apache.hive": INFO
+    "org.apache.iceberg": DEBUG
+

@@ -1,0 +1,150 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: cert-manager
+  namespace: kube-system
+spec:
+  chart: cert-manager
+  repo: https://charts.jetstack.io
+  targetNamespace: cert-manager
+  valuesContent: |-
+    # Instalar CRDs
+    installCRDs: true
+    
+    # Configurações do controller
+    replicaCount: 2
+    
+    # Recursos
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+    
+    # Security context
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    
+    # Pod security
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    
+    # Webhook
+    webhook:
+      replicaCount: 2
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+    
+    # CA Injector
+    cainjector:
+      replicaCount: 2
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+    
+    # Prometheus monitoring
+    prometheus:
+      enabled: true
+      servicemonitor:
+        enabled: true
+        namespace: monitoring
+
+---
+# ClusterIssuer para Let's Encrypt (Produção)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    # Email para notificações
+    email: admin@yourdomain.com
+    
+    # Servidor ACME de produção
+    server: https://acme-v02.api.letsencrypt.org/directory
+    
+    # Chave privada para conta ACME
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    
+    # Solver HTTP01
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+          podTemplate:
+            spec:
+              nodeSelector:
+                "kubernetes.io/os": linux
+    
+    # Solver DNS01 (opcional, para wildcards)
+    # - dns01:
+    #     cloudflare:
+    #       email: admin@yourdomain.com
+    #       apiKeySecretRef:
+    #         name: cloudflare-api-key-secret
+    #         key: api-key
+
+---
+# ClusterIssuer para Let's Encrypt (Staging/Teste)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    # Email para notificações
+    email: admin@yourdomain.com
+    
+    # Servidor ACME de staging
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    
+    # Chave privada para conta ACME
+    privateKeySecretRef:
+      name: letsencrypt-staging
+    
+    # Solver HTTP01
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+---
+# Certificate para wildcard (opcional)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-yourdomain-com
+  namespace: default
+spec:
+  secretName: wildcard-yourdomain-com-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - "*.yourdomain.com"
+  - "yourdomain.com"
+

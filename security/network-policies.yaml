@@ -1,0 +1,283 @@
+# Network Policies para segurança da stack
+
+---
+# Default deny all para namespace argocd
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: argocd
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# ArgoCD Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: argocd-network-policy
+  namespace: argocd
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Permitir tráfego do Ingress Controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Permitir tráfego de monitoramento
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Permitir acesso ao Git repositories
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 22
+  # Permitir DNS
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  # Permitir acesso ao Kubernetes API
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 6443
+
+---
+# Trino Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trino-network-policy
+  namespace: trino
+spec:
+  podSelector:
+    matchLabels:
+      app: trino
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Permitir tráfego do Superset
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: superset
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Permitir tráfego do DBT
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: prefect
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Permitir tráfego de monitoramento
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Permitir acesso ao Hive Metastore
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: hive-metastore
+    ports:
+    - protocol: TCP
+      port: 9083
+  # Permitir acesso ao MinIO
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: minio
+    ports:
+    - protocol: TCP
+      port: 9000
+  # Permitir DNS
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+---
+# MinIO Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: minio-network-policy
+  namespace: minio
+spec:
+  podSelector:
+    matchLabels:
+      app: minio
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Permitir tráfego do Trino
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: trino
+    ports:
+    - protocol: TCP
+      port: 9000
+  # Permitir tráfego do Airbyte
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: airbyte
+    ports:
+    - protocol: TCP
+      port: 9000
+  # Permitir tráfego do Prefect
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: prefect
+    ports:
+    - protocol: TCP
+      port: 9000
+  # Permitir tráfego de monitoramento
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9000
+  egress:
+  # Permitir DNS
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+---
+# Hive Metastore Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hive-metastore-network-policy
+  namespace: hive-metastore
+spec:
+  podSelector:
+    matchLabels:
+      app: hive-metastore
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Permitir tráfego do Trino
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: trino
+    ports:
+    - protocol: TCP
+      port: 9083
+  # Permitir tráfego de monitoramento
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9083
+  egress:
+  # Permitir acesso ao PostgreSQL
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Permitir DNS
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+---
+# PostgreSQL Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgresql-network-policy
+  namespace: postgresql
+spec:
+  podSelector:
+    matchLabels:
+      app: postgresql
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Permitir tráfego do Hive Metastore
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: hive-metastore
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Permitir tráfego do Superset
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: superset
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Permitir tráfego de monitoramento
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 5432
+  egress:
+  # Permitir DNS
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+

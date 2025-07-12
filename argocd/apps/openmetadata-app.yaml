@@ -1,0 +1,146 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openmetadata
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://helm.open-metadata.org
+    chart: openmetadata
+    targetRevision: 1.2.0
+    helm:
+      values: |
+        global:
+          clusterName: lakehouse-cluster
+          openmetadata:
+            host: openmetadata
+            port: 8585
+        
+        openmetadata:
+          config:
+            authentication:
+              provider: basic
+              publicKeys:
+                - http://openmetadata:8585/api/v1/system/config/jwks
+              authority: http://openmetadata:8585/api/v1/system
+              clientId: open-metadata
+              callbackUrl: http://openmetadata:8585/callback
+            authorizer:
+              className: org.openmetadata.service.security.DefaultAuthorizer
+              containerRequestFilter: org.openmetadata.service.security.JwtFilter
+              initialAdmins:
+                - admin
+              principalDomain: open-metadata.org
+            database:
+              host: openmetadata-mysql
+              port: 3306
+              driverClass: com.mysql.cj.jdbc.Driver
+              scheme: mysql
+              databaseName: openmetadata_db
+              username: openmetadata_user
+              password: openmetadata_password
+            elasticsearch:
+              host: openmetadata-elasticsearch
+              port: 9200
+              scheme: http
+              username: ""
+              password: ""
+              truststorePassword: ""
+              connectionTimeoutSecs: 5
+              socketTimeoutSecs: 60
+              keepAliveTimeoutSecs: 600
+              batchSize: 10
+            eventHandlerConfiguration:
+              eventHandlerClassNames:
+                - org.openmetadata.service.events.AuditEventHandler
+                - org.openmetadata.service.events.ChangeEventHandler
+            pipelineServiceClientConfiguration:
+              enabled: true
+              className: org.openmetadata.service.clients.pipeline.airflow.AirflowRESTClient
+              apiEndpoint: http://airflow-webserver:8080
+              username: admin
+              password: admin
+              verifySSL: false
+              timeout: 10
+        
+        mysql:
+          enabled: true
+          auth:
+            rootPassword: password
+            username: openmetadata_user
+            password: openmetadata_password
+            database: openmetadata_db
+          primary:
+            persistence:
+              enabled: true
+              size: 50Gi
+            resources:
+              requests:
+                memory: 256Mi
+                cpu: 250m
+              limits:
+                memory: 512Mi
+                cpu: 500m
+        
+        elasticsearch:
+          enabled: true
+          clusterName: openmetadata
+          replicas: 1
+          minimumMasterNodes: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          volumeClaimTemplate:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 30Gi
+          esConfig:
+            elasticsearch.yml: |
+              cluster.name: openmetadata
+              network.host: 0.0.0.0
+              discovery.type: single-node
+              xpack.security.enabled: false
+        
+        airflow:
+          enabled: false
+        
+        ingress:
+          enabled: false
+        
+        service:
+          type: ClusterIP
+          port: 8585
+        
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openmetadata
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+

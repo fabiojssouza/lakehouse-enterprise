@@ -1,0 +1,107 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: superset-ingress
+  namespace: superset
+  annotations:
+    # Ingress class
+    kubernetes.io/ingress.class: nginx
+    
+    # SSL/TLS
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Superset specific
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    
+    # Security
+    nginx.ingress.kubernetes.io/auth-url: "https://auth.yourdomain.com/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://auth.yourdomain.com/oauth2/start?rd=https://$host$request_uri"
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Preferred-Username"
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "200"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    
+    # Upload size for dashboards
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    
+    # Timeouts para queries longas
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    
+    # Custom headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      
+spec:
+  tls:
+  - hosts:
+    - superset.yourdomain.com
+    secretName: superset-tls
+  rules:
+  - host: superset.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: superset
+            port:
+              number: 8088
+
+---
+# NetworkPolicy para Superset (segurança adicional)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: superset-network-policy
+  namespace: superset
+spec:
+  podSelector:
+    matchLabels:
+      app: superset
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8088
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8088
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: trino
+    ports:
+    - protocol: TCP
+      port: 8080
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+

@@ -1,0 +1,157 @@
+# PostgreSQL Helm Chart Values
+# Backend database para Hive Metastore
+
+## PostgreSQL image configuration
+image:
+  repository: postgres
+  tag: "15.4"
+  pullPolicy: IfNotPresent
+
+## PostgreSQL authentication
+auth:
+  enablePostgresUser: true
+  postgresPassword: "postgres123"
+  username: "hive"
+  password: "hive123"
+  database: "metastore"
+  existingSecret: ""
+  secretKeys:
+    adminPasswordKey: postgres-password
+    userPasswordKey: password
+
+## PostgreSQL primary configuration
+primary:
+  name: primary
+  
+  ## PostgreSQL configuration
+  configuration: |
+    # PostgreSQL configuration for Hive Metastore
+    max_connections = 200
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    maintenance_work_mem = 64MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    work_mem = 4MB
+    min_wal_size = 1GB
+    max_wal_size = 4GB
+    max_worker_processes = 8
+    max_parallel_workers_per_gather = 4
+    max_parallel_workers = 8
+    max_parallel_maintenance_workers = 4
+    
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = 'log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_statement = 'all'
+    log_min_duration_statement = 1000
+    
+    # Timezone
+    timezone = 'UTC'
+    
+  ## PostgreSQL extended configuration
+  extendedConfiguration: |
+    # Extended configuration for better performance
+    shared_preload_libraries = 'pg_stat_statements'
+    pg_stat_statements.max = 10000
+    pg_stat_statements.track = all
+    
+  ## PostgreSQL initialization scripts
+  initdb:
+    scripts:
+      01-create-hive-schema.sql: |
+        -- Create Hive Metastore schema
+        CREATE SCHEMA IF NOT EXISTS hive_metastore;
+        GRANT ALL PRIVILEGES ON SCHEMA hive_metastore TO hive;
+        
+        -- Create additional schemas for different environments
+        CREATE SCHEMA IF NOT EXISTS hive_metastore_dev;
+        CREATE SCHEMA IF NOT EXISTS hive_metastore_test;
+        CREATE SCHEMA IF NOT EXISTS hive_metastore_prod;
+        
+        GRANT ALL PRIVILEGES ON SCHEMA hive_metastore_dev TO hive;
+        GRANT ALL PRIVILEGES ON SCHEMA hive_metastore_test TO hive;
+        GRANT ALL PRIVILEGES ON SCHEMA hive_metastore_prod TO hive;
+        
+        -- Set default privileges
+        ALTER DEFAULT PRIVILEGES IN SCHEMA hive_metastore GRANT ALL ON TABLES TO hive;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA hive_metastore_dev GRANT ALL ON TABLES TO hive;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA hive_metastore_test GRANT ALL ON TABLES TO hive;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA hive_metastore_prod GRANT ALL ON TABLES TO hive;
+
+## PostgreSQL persistence
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 100Gi
+  annotations: {}
+  mountPath: /bitnami/postgresql
+  subPath: ""
+
+## PostgreSQL resources
+resources:
+  limits:
+    memory: 2Gi
+    cpu: 1000m
+  requests:
+    memory: 1Gi
+    cpu: 500m
+
+## PostgreSQL service configuration
+service:
+  type: ClusterIP
+  ports:
+    postgresql: 5432
+  annotations: {}
+
+## PostgreSQL metrics
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+
+## PostgreSQL security context
+securityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+
+## PostgreSQL pod security context
+podSecurityContext:
+  enabled: true
+  fsGroup: 1001
+
+## PostgreSQL network policy
+networkPolicy:
+  enabled: false
+  allowExternal: true
+  explicitNamespacesSelector: {}
+
+## PostgreSQL pod disruption budget
+pdb:
+  create: true
+  minAvailable: 1
+  maxUnavailable: ""
+
+## PostgreSQL node selector
+nodeSelector: {}
+
+## PostgreSQL tolerations
+tolerations: []
+
+## PostgreSQL affinity
+affinity: {}
+
+## PostgreSQL priority class
+priorityClassName: ""
+

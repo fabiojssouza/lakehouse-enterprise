@@ -1,0 +1,419 @@
+# Trino Helm Chart Values
+# Distributed SQL Query Engine for Lakehouse Enterprise
+
+## Trino image configuration
+image:
+  repository: trinodb/trino
+  tag: "430"
+  pullPolicy: IfNotPresent
+
+## Trino server configuration
+server:
+  workers: 3  # Aumentado para melhor performance
+  
+  node:
+    environment: production
+    dataDir: /data/trino
+    pluginDir: /usr/lib/trino/plugin
+  
+  log:
+    trino:
+      level: INFO
+    "org.apache.iceberg": DEBUG
+    "io.trino.plugin.iceberg": DEBUG
+  
+  config:
+    path: /etc/trino
+    http:
+      port: 8080
+    https:
+      enabled: false
+      port: 8443
+      keystore:
+        path: ""
+    query:
+      maxMemory: "8GB"  # Aumentado para queries complexas
+      maxMemoryPerNode: "2GB"
+      maxTotalMemory: "16GB"
+      maxTotalMemoryPerNode: "4GB"
+      maxConcurrentQueries: 50
+      maxQueuedQueries: 100
+    memory:
+      heapHeadroomPerNode: "2GB"
+    prestoCompatibleHeader: false
+    
+    # Configurações específicas para Iceberg
+    experimental:
+      spill-enabled: true
+      spiller-spill-path: /tmp/trino-spill
+      spiller-max-used-space-threshold: 0.8
+  
+  exchangeManager:
+    name: filesystem
+    baseDir: /tmp/trino-local-file-system-exchange-manager
+  
+  workerExtraConfig: |
+    # Worker specific configurations for Iceberg
+    experimental.spill-enabled=true
+    experimental.spiller-spill-path=/tmp/trino-spill
+    experimental.spiller-max-used-space-threshold=0.8
+    
+  coordinatorExtraConfig: |
+    # Coordinator specific configurations
+    experimental.spill-enabled=true
+    experimental.spiller-spill-path=/tmp/trino-spill
+    experimental.spiller-max-used-space-threshold=0.8
+    
+    # Query optimization
+    optimizer.join-reordering-strategy=AUTOMATIC
+    optimizer.join-distribution-type=AUTOMATIC
+    optimizer.optimize-hash-generation=true
+    optimizer.optimize-metadata-queries=true
+    optimizer.push-aggregation-through-outer-join=true
+    optimizer.push-table-write-through-union=true
+    optimizer.dictionary-aggregation=true
+    optimizer.use-mark-distinct=true
+    
+  autoscaling:
+    enabled: true
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+## Trino coordinator configuration
+coordinator:
+  jvm:
+    maxHeapSize: "12G"  # Aumentado para melhor performance
+    gcMethod:
+      type: "G1GC"
+      g1:
+        heapRegionSize: "32M"
+  
+  config:
+    memory:
+      heapHeadroomPerNode: "2GB"
+    query:
+      maxMemory: "80GB"
+      maxConcurrentQueries: 100
+  
+  resources:
+    requests:
+      memory: "16Gi"
+      cpu: "4"
+    limits:
+      memory: "24Gi"
+      cpu: "8"
+  
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 6
+    successThreshold: 1
+  
+  readinessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  additionalJVMConfig:
+    - "-XX:+UseG1GC"
+    - "-XX:G1HeapRegionSize=32M"
+    - "-XX:+UseG1MixedGCCountTarget=8"
+    - "-XX:+UseStringDeduplication"
+    - "-XX:MaxGCPauseMillis=200"
+    - "-XX:+UnlockExperimentalVMOptions"
+    - "-XX:+UseCGroupMemoryLimitForHeap"
+    - "-Djava.net.preferIPv4Stack=true"
+  additionalExposedPorts: {}
+
+## Trino worker configuration
+worker:
+  jvm:
+    maxHeapSize: "12G"
+    gcMethod:
+      type: "G1GC"
+      g1:
+        heapRegionSize: "32M"
+  
+  config:
+    memory:
+      heapHeadroomPerNode: "2GB"
+  
+  resources:
+    requests:
+      memory: "16Gi"
+      cpu: "4"
+    limits:
+      memory: "24Gi"
+      cpu: "8"
+  
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 6
+    successThreshold: 1
+  
+  readinessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  additionalJVMConfig:
+    - "-XX:+UseG1GC"
+    - "-XX:G1HeapRegionSize=32M"
+    - "-XX:+UseG1MixedGCCountTarget=8"
+    - "-XX:+UseStringDeduplication"
+    - "-XX:MaxGCPauseMillis=200"
+    - "-XX:+UnlockExperimentalVMOptions"
+    - "-XX:+UseCGroupMemoryLimitForHeap"
+    - "-Djava.net.preferIPv4Stack=true"
+  additionalExposedPorts: {}
+
+## Trino service configuration
+service:
+  type: ClusterIP
+  port: 8080
+  nodePort: null
+  annotations: {}
+
+## Trino ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: trino.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+## Trino catalogs configuration - OTIMIZADO PARA ICEBERG
+catalogs:
+  # Iceberg catalog principal - CONFIGURAÇÃO COMPLETA OTIMIZADA
+  iceberg: |
+    connector.name=iceberg
+    iceberg.catalog.type=hive_metastore
+    hive.metastore.uri=thrift://hive-metastore.hive-metastore.svc.cluster.local:9083
+    
+    # Configurações S3/MinIO
+    hive.s3.endpoint=http://minio.minio.svc.cluster.local:9000
+    hive.s3.path-style-access=true
+    hive.s3.aws-access-key=minioadmin
+    hive.s3.aws-secret-key=minioadmin123
+    hive.s3.ssl.enabled=false
+    hive.s3.max-connections=500
+    hive.s3.max-error-retries=10
+    hive.s3.connect-timeout=5s
+    hive.s3.socket-timeout=5s
+    
+    # Configurações específicas do Iceberg - OTIMIZADAS
+    iceberg.file-format=PARQUET
+    iceberg.compression-codec=ZSTD
+    iceberg.target-max-file-size=134217728
+    iceberg.unique-table-location=true
+    iceberg.table-statistics-enabled=true
+    iceberg.extended-statistics.enabled=true
+    iceberg.extended-statistics.collect-on-write=true
+    iceberg.projection-pushdown-enabled=true
+    iceberg.dynamic-filtering.enabled=true
+    iceberg.dynamic-filtering.wait-timeout=5m
+    iceberg.register-table-procedure.enabled=true
+    iceberg.add-files-procedure.enabled=true
+    iceberg.materialized-views.enabled=true
+    iceberg.incremental-refresh-enabled=true
+    
+    # Cache de metadados - CRÍTICO PARA PERFORMANCE
+    iceberg.metadata-cache.enabled=true
+    iceberg.metadata-cache.ttl=10m
+    iceberg.metadata-cache.max-size=10000
+    
+    # Configurações de escrita otimizada
+    iceberg.sorted-writing-enabled=true
+    iceberg.object-store-layout.enabled=true
+    iceberg.idle-writer-min-file-size=67108864
+    iceberg.max-partitions-per-writer=100
+    
+    # Configurações de limpeza automática
+    iceberg.expire-snapshots.min-retention=7d
+    iceberg.remove-orphan-files.min-retention=7d
+    
+    # Configurações de paralelismo
+    iceberg.split-manager-threads=16
+    iceberg.metadata.parallelism=8
+    
+    # Configurações de filtros
+    iceberg.query-partition-filter-required=false
+    iceberg.minimum-assigned-split-weight=0.05
+    
+    # Configurações experimentais para melhor performance
+    iceberg.delete-schema-locations-fallback=false
+    iceberg.use-file-size-from-metadata=true
+    
+  # Catalog MinIO direto para casos específicos
+  minio: |
+    connector.name=hive
+    hive.metastore.uri=thrift://hive-metastore.hive-metastore.svc.cluster.local:9083
+    hive.s3.endpoint=http://minio.minio.svc.cluster.local:9000
+    hive.s3.path-style-access=true
+    hive.s3.aws-access-key=minioadmin
+    hive.s3.aws-secret-key=minioadmin123
+    hive.s3.ssl.enabled=false
+    hive.allow-drop-table=true
+    hive.allow-rename-table=true
+    hive.allow-add-column=true
+    hive.allow-drop-column=true
+    hive.allow-rename-column=true
+    hive.non-managed-table-writes-enabled=true
+    hive.non-managed-table-creates-enabled=true
+    hive.max-partitions-per-scan=100000
+    hive.max-partitions-per-writers=100
+    
+  # PostgreSQL catalog para metadados e monitoramento
+  postgresql: |
+    connector.name=postgresql
+    connection-url=jdbc:postgresql://postgresql.postgresql.svc.cluster.local:5432/metastore
+    connection-user=hive
+    connection-password=hive123
+    case-insensitive-name-matching=true
+    postgresql.include-system-tables=false
+    
+  # Memory catalog para tabelas temporárias
+  memory: |
+    connector.name=memory
+    memory.max-data-per-node=1GB
+
+## Trino secrets
+secrets:
+  - name: trino-catalog-secrets
+    data:
+      minio-access-key: minioadmin
+      minio-secret-key: minioadmin123
+      postgres-password: trino123
+
+## Trino authentication
+auth: {}
+
+## Trino access control
+accessControl: {}
+
+## Trino event listeners
+eventListeners: []
+
+## Trino resource groups
+resourceGroups: {}
+
+## Trino session properties
+sessionProperties: {}
+
+## Trino additional volumes
+additionalVolumes:
+  - name: trino-spill
+    emptyDir:
+      sizeLimit: 50Gi
+
+## Trino additional volume mounts
+additionalVolumeMounts:
+  - name: trino-spill
+    mountPath: /tmp/trino-spill
+
+## Trino additional containers
+additionalContainers: []
+
+## Trino init containers
+initContainers: []
+
+## Trino security context
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+
+## Trino pod security context
+podSecurityContext:
+  fsGroup: 1000
+
+## Trino service account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+## Trino pod annotations
+podAnnotations: {}
+
+## Trino pod labels
+podLabels: {}
+
+## Trino common labels
+commonLabels: {}
+
+## Trino node selector
+nodeSelector: {}
+
+## Trino tolerations
+tolerations: []
+
+## Trino affinity
+affinity: {}
+
+## Trino priority class
+priorityClassName: ""
+
+## Trino environment variables
+env: []
+
+## Trino environment variables from secrets/configmaps
+envFrom: []
+
+## Trino additional JVM config
+additionalJVMConfig: []
+
+## Trino additional exposed ports
+additionalExposedPorts: {}
+
+## Trino shutdown grace period
+terminationGracePeriodSeconds: 30
+
+## Trino revision history limit
+revisionHistoryLimit: 10
+
+## Trino pod disruption budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  maxUnavailable: ""
+
+## Trino horizontal pod autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+## Trino network policy
+networkPolicy:
+  enabled: false
+
+## Trino service monitor for Prometheus
+serviceMonitor:
+  enabled: false
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /v1/status
+

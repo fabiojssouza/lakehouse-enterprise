@@ -1,0 +1,321 @@
+# Airbyte Helm Chart Values
+# Data Integration Platform for Lakehouse Enterprise
+
+## Global configuration
+global:
+  serviceType: ClusterIP
+  edition: community
+  
+  ## Database configuration
+  database:
+    secretName: airbyte-secrets
+    secretValue: database-password
+    host: airbyte-postgresql
+    port: 5432
+    database: airbyte
+    username: airbyte
+    password: airbyte123
+  
+  ## Logs configuration
+  logs:
+    ## MinIO S3 configuration for logs
+    accessKey:
+      password: minioadmin
+      existingSecret: airbyte-secrets
+      existingSecretKey: aws-access-key-id
+    secretKey:
+      password: minioadmin123
+      existingSecret: airbyte-secrets
+      existingSecretKey: aws-secret-access-key
+    s3:
+      enabled: true
+      bucket: airbyte-logs
+      bucketRegion: us-east-1
+      endpoint: http://minio.minio.svc.cluster.local:9000
+  
+  ## State storage configuration
+  state:
+    storage:
+      type: S3
+      bucketName: airbyte-state
+      region: us-east-1
+      endpoint: http://minio.minio.svc.cluster.local:9000
+      accessKeyId: minioadmin
+      secretAccessKey: minioadmin123
+
+## Webapp configuration
+webapp:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: airbyte/webapp
+    tag: 0.50.33
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: NodePort
+    port: 80
+    annotations: {}
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  env_vars:
+    AIRBYTE_VERSION: 0.50.33
+    API_URL: /api/v1/
+    INTERNAL_API_HOST: airbyte-server-svc:8001
+    CONNECTOR_BUILDER_API_HOST: airbyte-connector-builder-server-svc:80
+
+## Server configuration
+server:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: airbyte/server
+    tag: 0.50.33
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: NodePort
+    nodePort: 30800  #editado
+    targetPort: 8001 #editado
+    port: 8001
+    annotations: {}
+  
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  env_vars:
+    AIRBYTE_VERSION: 0.50.33
+    CONFIG_DATABASE_USER: airbyte
+    CONFIG_DATABASE_PASSWORD: airbyte123
+    CONFIG_DATABASE_URL: jdbc:postgresql://airbyte-postgresql:5432/airbyte
+    DATABASE_USER: airbyte
+    DATABASE_PASSWORD: airbyte123
+    DATABASE_URL: jdbc:postgresql://airbyte-postgresql:5432/airbyte
+    RUN_DATABASE_MIGRATION_ON_STARTUP: "true"
+    TEMPORAL_HOST: airbyte-temporal:7233
+    WORKER_ENVIRONMENT: kubernetes
+    WORKSPACE_ROOT: /tmp/workspace
+    WORKSPACE_DOCKER_MOUNT: airbyte_workspace
+    LOCAL_ROOT: /tmp/airbyte_local
+    LOCAL_DOCKER_MOUNT: /tmp/airbyte_local
+    CONFIG_ROOT: /data
+    TRACKING_STRATEGY: segment
+    AIRBYTE_ROLE: ""
+    AIRBYTE_VERSION: 0.50.33
+
+## Worker configuration
+worker:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: airbyte/worker
+    tag: 0.50.33
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  env_vars:
+    AIRBYTE_VERSION: 0.50.33
+    AUTO_DISABLE_FAILING_CONNECTIONS: "false"
+    CONFIG_DATABASE_USER: airbyte
+    CONFIG_DATABASE_PASSWORD: airbyte123
+    CONFIG_DATABASE_URL: jdbc:postgresql://airbyte-postgresql:5432/airbyte
+    DATABASE_USER: airbyte
+    DATABASE_PASSWORD: airbyte123
+    DATABASE_URL: jdbc:postgresql://airbyte-postgresql:5432/airbyte
+    TEMPORAL_HOST: airbyte-temporal:7233
+    WORKER_ENVIRONMENT: kubernetes
+    WORKSPACE_ROOT: /tmp/workspace
+    WORKSPACE_DOCKER_MOUNT: airbyte_workspace
+    LOCAL_ROOT: /tmp/airbyte_local
+    LOCAL_DOCKER_MOUNT: /tmp/airbyte_local
+    CONFIG_ROOT: /data
+
+## Temporal configuration
+temporal:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: temporalio/auto-setup
+    tag: 1.20.0
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 7233
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## PostgreSQL configuration
+postgresql:
+  enabled: true
+  
+  auth:
+    postgresPassword: airbyte123
+    username: airbyte
+    password: airbyte123
+    database: airbyte
+  
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""
+    
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+    
+    initdb:
+      scripts:
+        init.sql: |
+          CREATE DATABASE airbyte;
+          GRANT ALL PRIVILEGES ON DATABASE airbyte TO airbyte;
+
+## Connector Builder Server configuration
+connector-builder-server:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: airbyte/connector-builder-server
+    tag: 0.50.33
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 80
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## Cron configuration
+cron:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: airbyte/cron
+    tag: 0.50.33
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
+
+## Pod Sweeper configuration
+pod-sweeper:
+  enabled: true
+  
+  image:
+    repository: bitnami/kubectl
+    tag: 1.28
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+## Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: airbyte.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+## Service Account configuration
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+## Pod Security Context
+podSecurityContext:
+  fsGroup: 1000
+
+## Security Context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+
+## Secrets
+secrets:
+  DATABASE_PASSWORD: airbyte123
+  AWS_ACCESS_KEY_ID: minioadmin
+  AWS_SECRET_ACCESS_KEY: minioadmin123
+
+## Extra environment variables
+extraEnv: []
+
+## Extra containers
+extraContainers: []
+
+## Extra volumes
+extraVolumes: []
+
+## Extra volume mounts
+extraVolumeMounts: []
+

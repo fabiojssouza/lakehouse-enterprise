@@ -1,0 +1,214 @@
+# RBAC Configuration para Lakehouse Enterprise
+
+---
+# Namespace para RBAC
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rbac-system
+
+---
+# ClusterRole para Administradores da Stack
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lakehouse-admin
+rules:
+# Acesso completo aos namespaces da stack
+- apiGroups: [""]
+  resources: ["*"]
+  verbs: ["*"]
+  resourceNames: []
+- apiGroups: ["apps", "extensions", "networking.k8s.io", "cert-manager.io"]
+  resources: ["*"]
+  verbs: ["*"]
+# Acesso limitado a outros namespaces
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
+
+---
+# ClusterRole para Desenvolvedores/Analistas
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lakehouse-developer
+rules:
+# Acesso de leitura aos recursos
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+# Acesso aos logs
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+# Acesso limitado ao ArgoCD
+- apiGroups: ["argoproj.io"]
+  resources: ["applications"]
+  verbs: ["get", "list", "watch"]
+
+---
+# ClusterRole para Usuários de BI
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lakehouse-bi-user
+rules:
+# Acesso apenas de leitura aos pods do Superset e Trino
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+  resourceNames: []
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+
+---
+# ServiceAccount para Administradores
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lakehouse-admin-sa
+  namespace: rbac-system
+
+---
+# ServiceAccount para Desenvolvedores
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lakehouse-developer-sa
+  namespace: rbac-system
+
+---
+# ServiceAccount para Usuários BI
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lakehouse-bi-user-sa
+  namespace: rbac-system
+
+---
+# ClusterRoleBinding para Administradores
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: lakehouse-admin-binding
+subjects:
+- kind: ServiceAccount
+  name: lakehouse-admin-sa
+  namespace: rbac-system
+# Adicionar usuários específicos
+- kind: User
+  name: admin@yourdomain.com
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: lakehouse-admin
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRoleBinding para Desenvolvedores
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: lakehouse-developer-binding
+subjects:
+- kind: ServiceAccount
+  name: lakehouse-developer-sa
+  namespace: rbac-system
+# Adicionar usuários específicos
+- kind: User
+  name: dev@yourdomain.com
+  apiGroup: rbac.authorization.k8s.io
+- kind: User
+  name: data-engineer@yourdomain.com
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: lakehouse-developer
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRoleBinding para Usuários BI
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: lakehouse-bi-user-binding
+subjects:
+- kind: ServiceAccount
+  name: lakehouse-bi-user-sa
+  namespace: rbac-system
+# Adicionar usuários específicos
+- kind: User
+  name: analyst@yourdomain.com
+  apiGroup: rbac.authorization.k8s.io
+- kind: User
+  name: business-user@yourdomain.com
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: lakehouse-bi-user
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Role específico para namespace ArgoCD
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: argocd
+  name: argocd-manager
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["argoproj.io"]
+  resources: ["applications", "appprojects"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+# RoleBinding para ArgoCD
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-manager-binding
+  namespace: argocd
+subjects:
+- kind: ServiceAccount
+  name: lakehouse-admin-sa
+  namespace: rbac-system
+- kind: User
+  name: admin@yourdomain.com
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: argocd-manager
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# PodSecurityPolicy (se habilitado no cluster)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: lakehouse-psp
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+

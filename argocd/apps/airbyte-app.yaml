@@ -1,0 +1,107 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: airbyte
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://airbytehq.github.io/helm-charts
+    chart: airbyte
+    targetRevision: 0.45.36
+    helm:
+      values: |
+        global:
+          serviceType: ClusterIP
+          database:
+            secretName: airbyte-secrets
+            secretValue: database-password
+          logs:
+            accessKey:
+              password: minio
+              existingSecret: airbyte-secrets
+              existingSecretKey: aws-access-key-id
+            secretKey:
+              password: minio123
+              existingSecret: airbyte-secrets
+              existingSecretKey: aws-secret-access-key
+            s3:
+              enabled: true
+              bucket: airbyte-logs
+              bucketRegion: us-east-1
+              endpoint: http://minio.minio.svc.cluster.local:9000
+        
+        webapp:
+          replicaCount: 1
+          image:
+            repository: airbyte/webapp
+            tag: 0.45.36
+          service:
+            type: ClusterIP
+            port: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+        
+        server:
+          replicaCount: 1
+          image:
+            repository: airbyte/server
+            tag: 0.45.36
+          service:
+            type: ClusterIP
+            port: 8001
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+        
+        worker:
+          replicaCount: 1
+          image:
+            repository: airbyte/worker
+            tag: 0.45.36
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+        
+        postgresql:
+          enabled: true
+          auth:
+            postgresPassword: airbyte123
+            database: airbyte
+          primary:
+            persistence:
+              enabled: true
+              size: 20Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: airbyte
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+

@@ -1,0 +1,128 @@
+# Prefect Helm Chart Values
+# Workflow Orchestration for Lakehouse Enterprise
+
+server:
+  image:
+    repository: prefecthq/prefect
+    tag: 2.14.10-python3.11
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 1
+  
+  service:
+    type: ClusterIP
+    port: 4200
+    annotations: {}
+  
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+  
+  env:
+    - name: PREFECT_SERVER_API_HOST
+      value: "0.0.0.0"
+    - name: PREFECT_SERVER_API_PORT
+      value: "4200"
+    - name: PREFECT_API_DATABASE_CONNECTION_URL
+      value: "postgresql+asyncpg://prefect:prefect123@prefect-postgresql:5432/prefect"
+    - name: PREFECT_API_DATABASE_MIGRATE_ON_START
+      value: "true"
+    - name: PREFECT_LOGGING_LEVEL
+      value: "INFO"
+
+agent:
+  enabled: true
+  image:
+    repository: prefecthq/prefect
+    tag: 2.14.10-python3.11
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 1
+  
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 250m
+  
+  env:
+    - name: PREFECT_API_URL
+      value: "http://prefect-server:4200/api"
+    - name: PREFECT_AGENT_PREFETCH_SECONDS
+      value: "10"
+    - name: PREFECT_AGENT_QUERY_INTERVAL
+      value: "5"
+
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: prefect123
+    username: prefect
+    password: prefect123
+    database: prefect
+  
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+    
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 250m
+
+ui:
+  enabled: true
+  image:
+    repository: prefecthq/prefect-ui
+    tag: 2.14.10
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 4200
+  
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi
+      cpu: 100m
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: prefect.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
